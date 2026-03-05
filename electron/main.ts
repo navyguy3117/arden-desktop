@@ -63,7 +63,9 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: true,
     },
-    icon: path.join(__dirname, "../../arden.ico"),
+    icon: fs.existsSync(path.join(__dirname, "../../arden.ico"))
+      ? path.join(__dirname, "../../arden.ico")
+      : undefined,
   });
 
   if (state.maximized) mainWindow.maximize();
@@ -90,8 +92,26 @@ function createWindow() {
 }
 
 function createTray() {
-  const icon = nativeImage.createFromPath(path.join(__dirname, "../../arden.ico"));
-  tray = new Tray(icon.resize({ width: 16, height: 16 }));
+  const iconPath = path.join(__dirname, "../../arden.ico");
+  let icon: Electron.NativeImage;
+  try {
+    icon = nativeImage.createFromPath(iconPath);
+    if (icon.isEmpty()) throw new Error("Icon image is empty");
+    icon = icon.resize({ width: 16, height: 16 });
+  } catch {
+    console.warn("[arden-desktop] Tray icon not found or invalid, using fallback");
+    // Create a 16x16 cyan pixel as fallback
+    const size = 16;
+    const buf = Buffer.alloc(size * size * 4);
+    for (let i = 0; i < size * size; i++) {
+      buf[i * 4 + 0] = 0x4f; // R
+      buf[i * 4 + 1] = 0xf2; // G
+      buf[i * 4 + 2] = 0xf2; // B
+      buf[i * 4 + 3] = 0xff; // A
+    }
+    icon = nativeImage.createFromBuffer(buf, { width: size, height: size });
+  }
+  tray = new Tray(icon);
 
   const contextMenu = Menu.buildFromTemplate([
     { label: "Show Arden", click: () => mainWindow?.show() },
