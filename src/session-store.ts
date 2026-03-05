@@ -13,6 +13,14 @@ export class SessionStore {
     fs.mkdirSync(this.dir, { recursive: true });
   }
 
+  /**
+   * Validate session ID to prevent path traversal attacks.
+   * Only allows UUID-format strings (hex + hyphens).
+   */
+  private validateId(id: string): boolean {
+    return /^[a-f0-9\-]{1,64}$/i.test(id);
+  }
+
   list(): SessionMeta[] {
     try {
       const files = fs.readdirSync(this.dir).filter((f) => f.endsWith(".json"));
@@ -43,6 +51,7 @@ export class SessionStore {
   }
 
   get(id: string): ChatSession | null {
+    if (!this.validateId(id)) return null;
     try {
       const filePath = path.join(this.dir, `${id}.json`);
       if (!fs.existsSync(filePath)) return null;
@@ -67,6 +76,7 @@ export class SessionStore {
   }
 
   addMessage(sessionId: string, message: ChatMessage): void {
+    if (!this.validateId(sessionId)) return;
     const session = this.get(sessionId);
     if (!session) return;
 
@@ -86,6 +96,7 @@ export class SessionStore {
   }
 
   delete(id: string): boolean {
+    if (!this.validateId(id)) return false;
     try {
       const filePath = path.join(this.dir, `${id}.json`);
       if (fs.existsSync(filePath)) {

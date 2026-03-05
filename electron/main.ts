@@ -1,7 +1,9 @@
 import { app, BrowserWindow, globalShortcut, ipcMain, Tray, Menu, nativeImage, dialog } from "electron";
 import path from "path";
 import fs from "fs";
+import os from "os";
 import { startServer, stopServer } from "./server-bridge";
+import { loadConfig, getConfig } from "../src/config";
 
 // RTX 5070 — MUST disable hardware acceleration (NeonShell rule)
 app.disableHardwareAcceleration();
@@ -158,14 +160,16 @@ function registerIPC() {
   ipcMain.on("window:close", () => mainWindow?.close());
 
   ipcMain.handle("dialog:open-file", async () => {
-    const result = await dialog.showOpenDialog(mainWindow!, {
+    if (!mainWindow) return [];
+    const result = await dialog.showOpenDialog(mainWindow, {
       properties: ["openFile", "multiSelections"],
     });
     return result.filePaths;
   });
 
   ipcMain.handle("dialog:save-file", async (_e, content: string, defaultName: string) => {
-    const result = await dialog.showSaveDialog(mainWindow!, { defaultPath: defaultName });
+    if (!mainWindow) return null;
+    const result = await dialog.showSaveDialog(mainWindow, { defaultPath: defaultName });
     if (result.filePath) {
       fs.writeFileSync(result.filePath, content);
       return result.filePath;
@@ -176,6 +180,13 @@ function registerIPC() {
 
 // App lifecycle
 app.whenReady().then(async () => {
+  // Load persisted config
+  const dataDir = path.join(os.homedir(), ".arden-desktop");
+  const cfg = loadConfig(dataDir);
+  gatewayUrl = cfg.gatewayUrl;
+  serverPort = cfg.serverPort;
+  console.log(`[arden-desktop] Config loaded — gateway: ${gatewayUrl}, port: ${serverPort}`);
+
   registerIPC();
 
   // Start embedded Hono server
