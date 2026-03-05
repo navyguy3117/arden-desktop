@@ -1,5 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
+import { useVoiceInput } from "../../hooks/useVoiceInput"
+import { useVoiceOutput } from "../../hooks/useVoiceOutput"
+import { VoiceWaveform } from "../VoiceWaveform"
 
 interface ArdenChatProps {
   apiBase: string
@@ -25,10 +28,46 @@ export function ArdenChat({ apiBase, gatewayUrl, gatewayHealth, onThought }: Ard
   const [isStreaming, setIsStreaming] = useState(false)
   const [mode, setMode] = useState<ChatMode>("arden")
   const [sessionId, setSessionId] = useState<string | null>(null)
+  const [voiceEnabled, setVoiceEnabled] = useState(() => {
+    try { return localStorage.getItem("arden-voice") === "true" } catch { return false }
+  })
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
+  const { isListening, isSupported: micSupported, transcript, toggleListening, stopListening } = useVoiceInput()
+  const { isSpeaking, playAudio, stopAudio } = useVoiceOutput()
+
   const gatewayConnected = gatewayHealth?.status === "ok"
+
+  // Persist voice preference
+  useEffect(() => {
+    try { localStorage.setItem("arden-voice", String(voiceEnabled)) } catch {}
+  }, [voiceEnabled])
+
+  // Sync voice transcript → input
+  useEffect(() => {
+    if (transcript) {
+      setInput(transcript)
+    }
+  }, [transcript])
+
+  // Auto-send when mic stops and we have transcript
+  const autoSendRef = useRef(false)
+  useEffect(() => {
+    if (isListening) {
+      autoSendRef.current = true
+    } else if (autoSendRef.current && transcript && voiceEnabled) {
+      autoSendRef.current = false
+      // Small delay to catch final transcript
+      const t = setTimeout(() => {
+        if (input.trim()) {
+          const form = document.querySelector("[data-voice-send]") as HTMLButtonElement
+          form?.click()
+        }
+      }, 600)
+      return () => clearTimeout(t)
+    }
+  }, [isListening, transcript, voiceEnabled, input])
 
   // Auto-scroll
   useEffect(() => {
@@ -77,7 +116,7 @@ export function ArdenChat({ apiBase, gatewayUrl, gatewayHealth, onThought }: Ard
         url = `${apiBase}/api/gateway/chat`
         body = JSON.stringify({
           messages: [{ role: "user", content: text }],
-          voiceEnabled: false,
+          voiceEnabled,
         })
       } else {
         // Local Claude SDK agent
@@ -165,6 +204,10 @@ export function ArdenChat({ apiBase, gatewayUrl, gatewayHealth, onThought }: Ard
                   )
                 )
               }
+              // Play voice audio if available
+              if (parsed.voice?.audioUrl && voiceEnabled) {
+                playAudio(parsed.voice.audioUrl).catch(() => {})
+              }
             }
           } catch {}
         }
@@ -246,6 +289,23 @@ export function ArdenChat({ apiBase, gatewayUrl, gatewayHealth, onThought }: Ard
               Claude SDK
             </span>
           )}
+          {voiceEnabled && (
+            <span
+              className="panel-badge"
+              style={{
+                color: "#ff9500",
+                backgroundColor: "rgba(255,149,0,0.1)",
+                border: "1px solid rgba(255,149,0,0.3)",
+              }}
+            >
+              Voice
+            </span>
+          )}
+          {isSpeaking && (
+            <div className="relative w-[50px] h-[50px] -my-4">
+              <VoiceWaveform />
+            </div>
+          )}
         </div>
       </div>
 
@@ -302,13 +362,33 @@ export function ArdenChat({ apiBase, gatewayUrl, gatewayHealth, onThought }: Ard
       {/* Input area */}
       <div className="p-3 border-t border-white/5">
         <div className="chat-input-area rounded-lg flex items-end gap-2 p-2">
+          {/* Mic button */}
+          {micSupported && (
+            <button
+              onClick={() => {
+                if (!voiceEnabled) setVoiceEnabled(true)
+                toggleListening()
+              }}
+              className="w-8 h-8 rounded-full flex items-center justify-center transition-all flex-shrink-0"
+              style={{
+                backgroundColor: isListening ? "rgba(255,59,48,0.2)" : "rgba(255,255,255,0.05)",
+                border: isListening ? "1px solid rgba(255,59,48,0.5)" : "1px solid rgba(255,255,255,0.1)",
+                animation: isListening ? "mic-pulse 1.5s ease-in-out infinite" : "none",
+              }}
+              title={isListening ? "Stop listening" : "Start voice input"}
+            >
+              <span className="text-[14px]">{isListening ? "🔴" : "🎙️"}</span>
+            </button>
+          )}
           <textarea
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={
-              mode === "arden"
+              isListening
+                ? "Listening..."
+                : mode === "arden"
                 ? "Talk to Arden..."
                 : "Ask the Agent to do something..."
             }
@@ -316,7 +396,23 @@ export function ArdenChat({ apiBase, gatewayUrl, gatewayHealth, onThought }: Ard
             rows={1}
             disabled={isStreaming}
           />
+          {/* Voice toggle */}
           <button
+            onClick={() => {
+              setVoiceEnabled(!voiceEnabled)
+              if (isSpeaking) stopAudio()
+            }}
+            className="w-8 h-8 rounded-full flex items-center justify-center transition-all flex-shrink-0"
+            style={{
+              backgroundColor: voiceEnabled ? "rgba(255,149,0,0.15)" : "rgba(255,255,255,0.05)",
+              border: voiceEnabled ? "1px solid rgba(255,149,0,0.3)" : "1px solid rgba(255,255,255,0.1)",
+            }}
+            title={voiceEnabled ? "Disable voice" : "Enable voice"}
+          >
+            <span className="text-[14px]">{voiceEnabled ? "🔊" : "🔇"}</span>
+          </button>
+          <button
+            data-voice-send
             onClick={sendMessage}
             disabled={!input.trim() || isStreaming}
             className="px-3 py-1.5 rounded-md text-[10px] uppercase tracking-wider font-medium transition-all disabled:opacity-30"
