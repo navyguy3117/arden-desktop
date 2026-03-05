@@ -1,0 +1,40 @@
+{
+  "name": "arden-desktop",
+  "version": "1.0.0",
+  "description": "Arden Desktop — AI assistant with Claude SDK agents, dual cortex memory, and cyberpunk dashboard",
+  "main": ".vite/build/main.js",
+  "author": "Mike Goodwin <navyguy3117>",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron-forge start",
+    "package": "electron-forge package",
+    "make": "electron-forge make",
+    "dev": "electron-forge start"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.52.0",
+    "@fontsource/space-grotesk": "^5.2.10",
+    "framer-motion": "^12.34.3",
+    "hono": "^4.7.4",
+    "@hono/node-server": "^1.15.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "recharts": "^3.7.0",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "^7.8.0",
+    "@electron-forge/maker-squirrel": "^7.8.0",
+    "@electron-forge/maker-zip": "^7.8.0",
+    "@electron-forge/plugin-vite": "^7.8.0",
+    "@tailwindcss/vite": "^4.2.1",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@types/uuid": "^10.0.0",
+    "@vitejs/plugin-react": "^4.5.2",
+    "electron": "^35.2.1",
+    "tailwindcss": "^4.2.1",
+    "typescript": "^5.9.0",
+    "vite": "^7.3.1"
+  }
+}
