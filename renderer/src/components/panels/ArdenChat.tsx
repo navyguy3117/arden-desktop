@@ -9,6 +9,8 @@ interface ArdenChatProps {
   gatewayUrl: string
   gatewayHealth: any
   onThought: (thought: any) => void
+  activeSessionId?: string | null
+  onSessionCreated?: (id: string) => void
 }
 
 interface Message {
@@ -22,7 +24,7 @@ interface Message {
 
 type ChatMode = "arden" | "agent"
 
-export function ArdenChat({ apiBase, gatewayUrl, gatewayHealth, onThought }: ArdenChatProps) {
+export function ArdenChat({ apiBase, gatewayUrl, gatewayHealth, onThought, activeSessionId, onSessionCreated }: ArdenChatProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [isStreaming, setIsStreaming] = useState(false)
@@ -80,6 +82,38 @@ export function ArdenChat({ apiBase, gatewayUrl, gatewayHealth, onThought }: Ard
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
+
+  // Session switching — load messages when activeSessionId changes externally
+  useEffect(() => {
+    if (activeSessionId === undefined) return
+    if (activeSessionId === null) {
+      // New session requested
+      setSessionId(null)
+      setMessages([])
+      return
+    }
+    if (activeSessionId === sessionId) return // Already on this session
+
+    setSessionId(activeSessionId)
+    // Load session messages
+    fetch(`${apiBase}/api/sessions/${activeSessionId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.messages?.length > 0) {
+          const restored: Message[] = data.messages.map((m: any, i: number) => ({
+            id: `restored-${i}-${Date.now()}`,
+            role: m.role,
+            content: m.content,
+            timestamp: m.timestamp || new Date().toISOString(),
+            source: mode,
+          }))
+          setMessages(restored)
+        } else {
+          setMessages([])
+        }
+      })
+      .catch(() => {})
+  }, [activeSessionId, apiBase])
 
   const sendMessage = useCallback(async () => {
     const text = input.trim()
@@ -167,6 +201,7 @@ export function ArdenChat({ apiBase, gatewayUrl, gatewayHealth, onThought }: Ard
 
             if (parsed.type === "init" && parsed.sessionId) {
               setSessionId(parsed.sessionId)
+              onSessionCreated?.(parsed.sessionId)
             }
 
             if (parsed.type === "agent_start") {

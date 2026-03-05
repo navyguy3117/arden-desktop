@@ -1,6 +1,6 @@
 {
   "name": "arden-desktop",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Arden Desktop — AI assistant with Claude SDK agents, dual cortex memory, and cyberpunk dashboard",
   "main": ".vite/build/main.js",
   "author": "Mike Goodwin <navyguy3117>",

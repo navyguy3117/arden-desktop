@@ -20,7 +20,7 @@ const config: ForgeConfig = {
         { entry: "electron/preload.ts", config: "vite.preload.config.ts", target: "preload" },
       ],
       renderer: [
-        { name: "main_window", config: "vite.renderer.config.ts" },
+        { name: "main_window", config: "vite.renderer.config.ts", entry: "renderer/index.html" },
       ],
     }),
   ],

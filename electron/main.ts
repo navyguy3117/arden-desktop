@@ -77,7 +77,7 @@ function createWindow() {
 
   // Hide to tray on close
   mainWindow.on("close", (e) => {
-    if (!app.isQuitting) {
+    if (!(app as any).isQuitting) {
       e.preventDefault();
       mainWindow?.hide();
     } else {

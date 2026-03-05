@@ -103,15 +103,15 @@ export function createApp(options: AppOptions): Hono {
               fullContent += content;
               await stream.writeSSE({ data: JSON.stringify({ content, done: false }) });
             } else if (event.type === "tool_use") {
-              await stream.writeSSE({ data: JSON.stringify({ type: "tool_use", ...event.data }) });
+              await stream.writeSSE({ data: JSON.stringify({ type: "tool_use", ...(event.data as Record<string, unknown>) }) });
             } else if (event.type === "agent_start") {
-              await stream.writeSSE({ data: JSON.stringify({ type: "agent_start", ...event.data }) });
+              await stream.writeSSE({ data: JSON.stringify({ type: "agent_start", ...(event.data as Record<string, unknown>) }) });
             } else if (event.type === "agent_complete") {
-              await stream.writeSSE({ data: JSON.stringify({ type: "agent_complete", ...event.data }) });
+              await stream.writeSSE({ data: JSON.stringify({ type: "agent_complete", ...(event.data as Record<string, unknown>) }) });
             } else if (event.type === "thought") {
-              await stream.writeSSE({ data: JSON.stringify({ type: "thought", ...event.data }) });
+              await stream.writeSSE({ data: JSON.stringify({ type: "thought", ...(event.data as Record<string, unknown>) }) });
             } else if (event.type === "error") {
-              await stream.writeSSE({ data: JSON.stringify({ type: "error", ...event.data }) });
+              await stream.writeSSE({ data: JSON.stringify({ type: "error", ...(event.data as Record<string, unknown>) }) });
             }
           },
         });
