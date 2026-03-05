@@ -91,11 +91,12 @@ export function createApp(options: AppOptions): Hono {
       try {
         await stream.writeSSE({ data: JSON.stringify({ type: "init", sessionId: session!.id }) });
 
-        await runAgent({
+        const result = await runAgent({
           sessionId: session!.id,
           message,
           model: model || getConfig().model,
           maxTurns: getConfig().maxTurns,
+          maxBudgetUsd: getConfig().maxBudgetUsd,
           onEvent: async (event) => {
             if (event.type === "text") {
               const { content } = event.data as { content: string };
@@ -121,6 +122,8 @@ export function createApp(options: AppOptions): Hono {
           role: "assistant",
           content: fullContent,
           timestamp: new Date().toISOString(),
+          cost: result.totalCost,
+          agentsUsed: result.agentsUsed,
         };
         sessionStore.addMessage(session!.id, assistantMsg);
 
@@ -130,6 +133,10 @@ export function createApp(options: AppOptions): Hono {
             done: true,
             sessionId: session!.id,
             contentLength: fullContent.length,
+            totalCost: result.totalCost,
+            totalTurns: result.totalTurns,
+            agentsUsed: result.agentsUsed,
+            duration: result.duration,
           }),
         });
         await stream.writeSSE({ data: "[DONE]" });

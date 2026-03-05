@@ -12,11 +12,12 @@
     "dev": "electron-forge start"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.69",
     "@anthropic-ai/sdk": "^0.52.0",
     "@fontsource/space-grotesk": "^5.2.10",
+    "@hono/node-server": "^1.15.0",
     "framer-motion": "^12.34.3",
     "hono": "^4.7.4",
-    "@hono/node-server": "^1.15.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "recharts": "^3.7.0",

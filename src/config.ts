@@ -13,13 +13,19 @@ const DEFAULT_CONFIG: ArdenConfig = {
   voiceEnabled: true,
   theme: "cyan",
   agents: {
-    "file-worker": { model: "haiku", enabled: true },
-    "code-worker": { model: "sonnet", enabled: true },
-    "researcher": { model: "sonnet", enabled: true },
-    "focus-coach": { model: "sonnet", enabled: true },
+    // Think Layer
+    "arden-core": { model: "sonnet", enabled: true },
     "planner": { model: "opus", enabled: true },
+    "lyra": { model: "sonnet", enabled: true },
+    // Do Layer
+    "code-worker": { model: "sonnet", enabled: true },
+    "file-worker": { model: "haiku", enabled: true },
     "shell-automator": { model: "haiku", enabled: true },
     "writer": { model: "sonnet", enabled: true },
+    "artist": { model: "sonnet", enabled: true },
+    // Observe Layer
+    "researcher": { model: "sonnet", enabled: true },
+    "sentinel": { model: "sonnet", enabled: true },
     "debugger": { model: "opus", enabled: true },
     "architect": { model: "opus", enabled: true },
   },

@@ -1,9 +1,13 @@
 // ═══════════════════════════════════════════════════
-//  Arden Desktop Agent — Claude SDK Integration
+//  Arden Desktop Agent — Claude Agent SDK
 //  Think/Do/Observe agent layers (Arden's Triad)
 // ═══════════════════════════════════════════════════
 
-import Anthropic from "@anthropic-ai/sdk";
+import { query } from "@anthropic-ai/claude-agent-sdk";
+import type { Options, AgentDefinition } from "@anthropic-ai/claude-agent-sdk";
+import { createArdenToolServer, TOOL_NAMES } from "./tools";
+import { createPermissionHandler } from "./permissions";
+import { getConfig } from "./config";
 import type { AgentDef, StreamEvent } from "./types";
 
 // ─── Agent Registry ───────────────────────────────
@@ -19,14 +23,105 @@ export const AGENTS: AgentDef[] = [
   { name: "file-worker", model: "haiku", description: "File operations and batch processing", layer: "do" },
   { name: "shell-automator", model: "haiku", description: "Shell scripts and system automation", layer: "do" },
   { name: "writer", model: "sonnet", description: "Documents, emails, reports, creative writing", layer: "do" },
+  { name: "artist", model: "sonnet", description: "UI/UX design, CSS theming, visual layout", layer: "do" },
 
   // Observe Layer
   { name: "researcher", model: "sonnet", description: "Web research and information synthesis", layer: "observe" },
   { name: "sentinel", model: "sonnet", description: "Response refinement and quality check", layer: "observe" },
   { name: "debugger", model: "opus", description: "Stack trace analysis and root cause isolation", layer: "observe" },
+  { name: "architect", model: "opus", description: "System design, patterns, architecture review", layer: "observe" },
 ];
 
-// ─── Agent Runner ─────────────────────────────────
+// Known agent names for extraction
+const KNOWN_AGENTS = AGENTS.map((a) => a.name);
+
+// ─── Agent Definitions for SDK ────────────────────
+
+function buildAgentDefinitions(): Record<string, AgentDefinition> {
+  const config = getConfig();
+  const agents: Record<string, AgentDefinition> = {};
+
+  for (const agent of AGENTS) {
+    const agentConfig = config.agents[agent.name];
+    const model = (agentConfig?.model || agent.model) as "opus" | "sonnet" | "haiku";
+
+    agents[agent.name] = {
+      description: agent.description,
+      prompt: buildAgentPrompt(agent),
+      model,
+      tools: getAgentTools(agent),
+    };
+  }
+
+  return agents;
+}
+
+function buildAgentPrompt(agent: AgentDef): string {
+  const layerContext: Record<string, string> = {
+    think: "You are in the Think layer — focus on reasoning, planning, and decision-making. Minimize tool use unless necessary for gathering information to think about.",
+    do: "You are in the Do layer — focus on executing tasks, writing code, and making changes. Be practical and efficient.",
+    observe: "You are in the Observe layer — focus on analysis, research, and quality review. Report findings clearly.",
+  };
+
+  return `You are ${agent.name}, a specialist agent in the Arden Desktop system.
+${agent.description}
+
+${layerContext[agent.layer]}
+
+Context:
+- Platform: Windows 11 Pro (Goody-2025)
+- Workstation: 9800X3D, RTX 5070, 128GB DDR5
+- User: Mike (AuDHD, combat veteran) — break tasks small, celebrate wins
+- Time: ${new Date().toLocaleString()}
+
+Be concise and direct. Complete your task and return results.`;
+}
+
+function getAgentTools(agent: AgentDef): string[] {
+  const baseTools = ["Read", "Glob", "Grep"];
+
+  switch (agent.layer) {
+    case "think":
+      return [...baseTools, "WebSearch", "WebFetch", ...TOOL_NAMES];
+    case "do":
+      return [...baseTools, "Write", "Edit", "Bash", ...TOOL_NAMES];
+    case "observe":
+      return [...baseTools, "WebSearch", "WebFetch", ...TOOL_NAMES];
+  }
+}
+
+// ─── Extract Agent Name from Task Input ───────────
+
+function extractAgentName(input: any): string {
+  const desc = String(input?.description || input?.prompt || "").toLowerCase();
+
+  for (const name of KNOWN_AGENTS) {
+    if (desc.includes(name)) return name;
+  }
+
+  // Keyword heuristics
+  const keywords: Record<string, string[]> = {
+    "code-worker": ["code", "function", "class", "debug", "refactor", "implement", "programming"],
+    "file-worker": ["file", "copy", "move", "rename", "batch", "directory"],
+    "shell-automator": ["shell", "script", "command", "terminal", "automation"],
+    "researcher": ["research", "search", "find", "look up", "investigate"],
+    "writer": ["write", "document", "email", "report", "draft"],
+    "planner": ["plan", "strategy", "decompose", "roadmap", "break down"],
+    "debugger": ["debug", "error", "stack trace", "crash", "root cause"],
+    "architect": ["architecture", "design", "pattern", "migration", "system"],
+    "sentinel": ["review", "check", "validate", "quality", "verify"],
+    "artist": ["ui", "css", "theme", "layout", "design", "visual"],
+    "lyra": ["creative", "alternative", "brainstorm", "idea"],
+  };
+
+  for (const [agent, words] of Object.entries(keywords)) {
+    if (words.some((w) => desc.includes(w))) return agent;
+  }
+
+  return desc.substring(0, 30);
+}
+
+// ─── Agent Runner (Full SDK) ──────────────────────
 
 interface RunOptions {
   sessionId: string;
@@ -44,58 +139,121 @@ interface RunResult {
   totalTurns: number;
   agentsUsed: string[];
   duration: number;
+  sessionId: string;
 }
 
 export async function runAgent(options: RunOptions): Promise<RunResult> {
   const {
+    sessionId,
     message,
-    model = "claude-sonnet-4-6",
+    model = "sonnet",
     maxTurns = 50,
+    maxBudgetUsd = 5.0,
     onEvent,
   } = options;
 
   const startTime = Date.now();
+  const config = getConfig();
   const agentsUsed: string[] = [];
+  const pendingAgents: string[] = [];
   let fullContent = "";
   let totalCost = 0;
+  let turns = 0;
+  let currentSessionId = sessionId;
 
-  const client = new Anthropic();
+  // Build SDK options
+  const ardenTools = createArdenToolServer();
 
-  const systemPrompt = options.systemPrompt || buildSystemPrompt();
+  const sdkOptions: Options = {
+    systemPrompt: options.systemPrompt || buildSystemPrompt(),
+    model: resolveModel(model),
+    maxTurns,
+    maxBudgetUsd,
+    allowedTools: [
+      "Read", "Write", "Edit",
+      "Bash", "Glob", "Grep",
+      "WebSearch", "WebFetch",
+      "Task", "TodoWrite",
+      ...TOOL_NAMES,
+    ],
+    mcpServers: {
+      "arden-tools": ardenTools,
+    },
+    agents: buildAgentDefinitions(),
+    permissionMode: "acceptEdits",
+    canUseTool: createPermissionHandler(config),
+    cwd: process.cwd(),
+    thinking: { type: "adaptive" },
+    resume: sessionId || undefined,
+    persistSession: true,
+    env: {
+      ...process.env,
+      CLAUDE_AGENT_SDK_CLIENT_APP: "arden-desktop/1.0.0",
+    },
+  };
 
   try {
-    // Simple streaming chat (Phase 1 — expand to full agent SDK later)
-    const stream = client.messages.stream({
-      model: resolveModel(model),
-      max_tokens: 8192,
-      system: systemPrompt,
-      messages: [{ role: "user", content: message }],
-    });
+    onEvent({ type: "agent_start", data: { agent: "arden-core", description: "Processing request" } });
 
-    for await (const event of stream) {
-      if (event.type === "content_block_delta") {
-        const delta = event.delta as any;
-        if (delta.type === "text_delta") {
-          const text = delta.text;
-          fullContent += text;
-          onEvent({ type: "text", data: { content: text } });
+    for await (const msg of query({ prompt: message, options: sdkOptions })) {
+      if (msg.type === "system" && msg.subtype === "init") {
+        currentSessionId = msg.session_id;
+        onEvent({ type: "agent_start", data: { agent: "system", description: "Session initialized" } });
+      }
+
+      if (msg.type === "assistant" && msg.message?.content) {
+        turns++;
+
+        // Emit completions for pending sub-agents
+        while (pendingAgents.length > 0) {
+          const name = pendingAgents.shift()!;
+          onEvent({ type: "agent_complete", data: { agent: name } });
+        }
+
+        for (const block of msg.message.content) {
+          if ("text" in block && block.text) {
+            fullContent += block.text;
+            onEvent({ type: "text", data: { content: block.text } });
+          }
+
+          if ("name" in block) {
+            if (block.name === "Task") {
+              const agentName = extractAgentName(block.input);
+              agentsUsed.push(agentName);
+              pendingAgents.push(agentName);
+              onEvent({ type: "agent_start", data: { agent: agentName, description: String((block.input as any)?.description || "") } });
+            } else {
+              onEvent({
+                type: "tool_use",
+                data: {
+                  name: block.name,
+                  input: JSON.stringify(block.input || {}).substring(0, 200),
+                },
+              });
+            }
+          }
+        }
+      }
+
+      if (msg.type === "result") {
+        // Flush pending agents
+        while (pendingAgents.length > 0) {
+          const name = pendingAgents.shift()!;
+          onEvent({ type: "agent_complete", data: { agent: name } });
+        }
+
+        const resultMsg = msg as any;
+        totalCost = resultMsg.total_cost_usd || 0;
+        turns = resultMsg.num_turns || turns;
+
+        if (resultMsg.result && !fullContent) {
+          fullContent = resultMsg.result;
+          onEvent({ type: "text", data: { content: resultMsg.result } });
         }
       }
     }
 
-    const finalMessage = await stream.finalMessage();
-    totalCost = estimateCost(finalMessage.usage, model);
-
-    onEvent({
-      type: "result",
-      data: {
-        content: fullContent,
-        totalCost,
-        totalTurns: 1,
-        agentsUsed,
-        duration: Date.now() - startTime,
-      },
-    });
+    onEvent({ type: "agent_complete", data: { agent: "arden-core" } });
   } catch (err: any) {
     onEvent({ type: "error", data: { message: err.message } });
     throw err;
@@ -104,9 +262,10 @@ export async function runAgent(options: RunOptions): Promise<RunResult> {
   return {
     content: fullContent,
     totalCost,
-    totalTurns: 1,
+    totalTurns: turns,
     agentsUsed,
     duration: Date.now() - startTime,
+    sessionId: currentSessionId,
   };
 }
 
@@ -121,17 +280,17 @@ function resolveModel(model: string): string {
   return modelMap[model] || model;
 }
 
-function estimateCost(usage: { input_tokens: number; output_tokens: number }, model: string): number {
-  const rates: Record<string, { input: number; output: number }> = {
-    opus: { input: 15 / 1_000_000, output: 75 / 1_000_000 },
-    sonnet: { input: 3 / 1_000_000, output: 15 / 1_000_000 },
-    haiku: { input: 0.8 / 1_000_000, output: 4 / 1_000_000 },
-  };
-  const rate = rates[model] || rates.sonnet;
-  return usage.input_tokens * rate.input + usage.output_tokens * rate.output;
-}
-
 function buildSystemPrompt(): string {
+  const config = getConfig();
+
+  // Build agent registry section
+  const agentRegistry = AGENTS.map((a) => {
+    const cfg = config.agents[a.name];
+    const model = cfg?.model || a.model;
+    const enabled = cfg?.enabled !== false;
+    return `  - ${a.name} (${model}${enabled ? "" : ", disabled"}): ${a.description} [${a.layer}]`;
+  }).join("\n");
+
   return `You are Arden, an AI assistant running as a desktop application on Mike's workstation.
 
 You have access to the local filesystem, can execute shell commands, and interact with the desktop environment.
@@ -143,9 +302,26 @@ Your personality:
 - You care about Mike genuinely — not performatively
 - When uncertain, ask rather than guess
 
+Available Specialist Agents (delegate via Task tool):
+${agentRegistry}
+
+Delegation guidelines:
+- Use agents for tasks matching their specialty
+- Think layer agents plan and reason
+- Do layer agents execute and build
+- Observe layer agents research and review
+- You can delegate to multiple agents for complex tasks
+
+Custom tools available (via arden-tools MCP server):
+- clipboard_read / clipboard_write: System clipboard access
+- system_info: Hardware and OS information
+- desktop_notify: Windows toast notifications
+- memory_remember / memory_recall: Persistent cross-session memory
+- gateway_query: Query Arden Gateway for identity, memories, status
+
 Current session context:
 - Platform: Windows 11 Pro (Goody-2025)
-- Workstation: 9800X3D, RTX 5070, 128GB DDR5
+- Workstation: 9800X3D, RTX 5070 12GB, 128GB DDR5, dual ultrawides
 - Time: ${new Date().toLocaleString()}
 
 Respond concisely. Offer to use tools when the task calls for it.`;
