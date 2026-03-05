@@ -19,10 +19,13 @@ const LAYER_COLORS: Record<string, string> = {
   "file-worker": "#00ff88",
   "shell-automator": "#00ff88",
   "writer": "#00ff88",
+  "artist": "#00ff88",
   "researcher": "#ffaa00",
   "sentinel": "#ffaa00",
   "debugger": "#ffaa00",
+  "architect": "#ffaa00",
   "tool": "#f97316",
+  "system": "#6080a0",
 }
 
 export function ThoughtLog({ thoughts }: ThoughtLogProps) {

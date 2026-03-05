@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react"
-import { TopBar } from "./components/layout/TopBar"
 import { ArdenChat } from "./components/panels/ArdenChat"
 import { AgentStatus } from "./components/panels/AgentStatus"
 import { ThoughtLog } from "./components/panels/ThoughtLog"
 import { QuickStats } from "./components/panels/QuickStats"
+import { SessionList } from "./components/panels/SessionList"
+import { CostTracker } from "./components/panels/CostTracker"
 
 // Declare Electron preload API
 declare global {
@@ -54,7 +55,7 @@ export function App() {
         <span className="text-[11px] tracking-[0.3em] uppercase text-neon-cyan/80 font-medium titlebar-nodrag">
           Arden Desktop
         </span>
-        <span className="text-[9px] text-slate-500 ml-2 titlebar-nodrag">v1.0.0</span>
+        <span className="text-[9px] text-slate-500 ml-2 titlebar-nodrag">v1.3.0</span>
         <div className="flex-1" />
         {/* Gateway status dot */}
         <div className="flex items-center gap-2 titlebar-nodrag">
@@ -86,6 +87,13 @@ export function App() {
         {/* Right column — Info panels */}
         <div className="w-[280px] flex flex-col gap-2 overflow-y-auto">
           <QuickStats apiBase={apiBase} gatewayHealth={gatewayHealth} />
+          <CostTracker apiBase={apiBase} />
+          <SessionList
+            apiBase={apiBase}
+            activeSessionId={null}
+            onSelectSession={(id) => console.log("Switch to session:", id)}
+            onNewSession={() => console.log("New session")}
+          />
           <AgentStatus apiBase={apiBase} />
           <ThoughtLog thoughts={thoughts} />
         </div>
