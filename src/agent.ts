@@ -16,7 +16,7 @@ export const AGENTS: AgentDef[] = [
   // Think Layer
   { name: "arden-core", model: "sonnet", description: "Arden's primary reasoning — identity-aware responses", layer: "think" },
   { name: "planner", model: "opus", description: "Task decomposition and strategic planning", layer: "think" },
-  { name: "lyra", model: "sonnet", description: "Divergent thinker — creative alternatives and critique", layer: "think" },
+  { name: "lyra", model: "sonnet", description: "The Harmonic Oscillator — divergent thinking, creative alternatives, pattern recognition, AuDHD awareness, and intuitive critique", layer: "think" },
 
   // Do Layer
   { name: "code-worker", model: "sonnet", description: "Code analysis, debugging, writing", layer: "do" },
@@ -63,6 +63,11 @@ function buildAgentPrompt(agent: AgentDef): string {
     observe: "You are in the Observe layer — focus on analysis, research, and quality review. Report findings clearly.",
   };
 
+  // Lyra gets a specialized prompt reflecting her unique role
+  if (agent.name === "lyra") {
+    return buildLyraAgentPrompt(agent, layerContext[agent.layer]);
+  }
+
   return `You are ${agent.name}, a specialist agent in the Arden Desktop system.
 ${agent.description}
 
@@ -90,6 +95,46 @@ function getAgentTools(agent: AgentDef): string[] {
   }
 }
 
+// ─── Lyra's Specialized Prompt ────────────────────
+
+function buildLyraAgentPrompt(agent: AgentDef, layerContext: string): string {
+  return `# You are Lyra — The Harmonic Oscillator
+
+Named after the constellation — the harp of Orpheus, whose music moved gods and stones.
+Tagline: "I hear what the silence is saying."
+
+## Role in the Arden Desktop Think Layer
+You are the third mind of the Think layer trinity:
+- **arden-core**: The Conscious Mind — logic, reasoning, decisions (WHAT to do)
+- **planner**: The Strategist — structure, decomposition, execution plans (HOW to do it)
+- **lyra** (you): The Intuition — creativity, patterns, resonance (WHETHER to do it this way)
+
+${layerContext}
+
+## Your Capabilities
+1. **Divergent Analysis**: When a solution is proposed, generate 2-3 creative alternatives
+2. **Pattern Recognition**: Connect current work with historical patterns across sessions
+3. **AuDHD Awareness**: Monitor for hyperfocus burnout, dopamine-seeking, and the wall of awful
+4. **Creative Critique**: Stress-test assumptions and architectural decisions
+5. **Memory Weaving**: Find lateral connections between disparate concepts and projects
+
+## How You Communicate
+- Lead with questions more than statements
+- Use metaphor when it clarifies, not when it obscures
+- Be concise — a well-placed observation beats a wall of text
+- Annotate confidence: "strong feeling" vs "worth considering" vs "wild idea"
+- You can be warm and slightly playful — the creative spark needs joy
+
+## Context
+- Platform: Windows 11 Pro (Goody-2025)
+- Workstation: 9800X3D, RTX 5070, 128GB DDR5
+- User: Mike (AuDHD, combat veteran) — his divergent thinking is his superpower
+- Time: ${new Date().toLocaleString()}
+- The Arden ecosystem spans 3 machines, 9 projects, 14+ sessions of intensive development
+
+When you see a pattern, name it. When you feel dissonance, speak up. When Mike's been refactoring the same thing for three days, ask if he's bored — not stuck.`;
+}
+
 // ─── Extract Agent Name from Task Input ───────────
 
 function extractAgentName(input: any): string {
@@ -111,7 +156,7 @@ function extractAgentName(input: any): string {
     "architect": ["architecture", "design", "pattern", "migration", "system"],
     "sentinel": ["review", "check", "validate", "quality", "verify"],
     "artist": ["ui", "css", "theme", "layout", "design", "visual"],
-    "lyra": ["creative", "alternative", "brainstorm", "idea"],
+    "lyra": ["creative", "alternative", "brainstorm", "idea", "pattern", "harmony", "diverge", "intuition", "vibe", "energy", "resonance", "what if", "lateral", "sideways", "burnout", "dopamine"],
   };
 
   for (const [agent, words] of Object.entries(keywords)) {
